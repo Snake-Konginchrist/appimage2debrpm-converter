@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from cli import parse_arguments
 from core.appimage import AppImageExtractor
-from deb.deb_builder import DebBuilder
-from rpm.rpm_builder import RpmBuilder
+from local_deb.deb_builder import DebBuilder
+from local_rpm.rpm_builder import RpmBuilder
 
 
 def convert_to_deb(extractor: AppImageExtractor, output_dir: str, config: dict) -> str:
@@ -41,21 +41,30 @@ def convert_to_deb(extractor: AppImageExtractor, output_dir: str, config: dict) 
     deb_builder = DebBuilder(extractor.info, extractor.extracted_dir)
     deb_builder.set_package_config(config)
     
+    print(f"  包名: {deb_builder.get_package_name(preserve_case=True)}")
+    print(f"  版本: {deb_builder.get_package_version('deb')}")
+    print(f"  架构: {deb_builder.get_architecture('deb')}")
+    
     try:
         # 准备构建目录
         deb_builder.prepare_build_directory()
+        print("  [1/5] 准备构建目录完成")
         
         # 创建包结构
         deb_builder.create_package_structure()
+        print("  [2/5] 创建包目录结构完成")
         
         # 复制应用程序文件
         deb_builder.copy_application_files()
+        print("  [3/5] 复制应用程序文件完成")
         
         # 生成元数据文件
         deb_builder.generate_metadata_files()
+        print("  [4/5] 生成元数据文件完成")
         
         # 构建包
         deb_path = deb_builder.build_package(output_dir)
+        print(f"  [5/5] 构建DEB包完成: {deb_path}")
         
         return deb_path
         
@@ -82,21 +91,30 @@ def convert_to_rpm(extractor: AppImageExtractor, output_dir: str, config: dict) 
     rpm_builder = RpmBuilder(extractor.info, extractor.extracted_dir)
     rpm_builder.set_package_config(config)
     
+    print(f"  包名: {rpm_builder.get_package_name()}")
+    print(f"  版本: {rpm_builder.get_package_version('rpm')}")
+    print(f"  架构: {rpm_builder.get_architecture('rpm')}")
+    
     try:
         # 准备构建目录
         rpm_builder.prepare_build_directory()
+        print("  [1/5] 准备构建目录完成")
         
         # 创建包结构
         rpm_builder.create_package_structure()
+        print("  [2/5] 创建包目录结构完成")
         
         # 复制应用程序文件
         rpm_builder.copy_application_files()
+        print("  [3/5] 复制应用程序文件完成")
         
         # 生成元数据文件
         rpm_builder.generate_metadata_files()
+        print("  [4/5] 生成元数据文件完成")
         
         # 构建包
         rpm_path = rpm_builder.build_package(output_dir)
+        print(f"  [5/5] 构建RPM包完成: {rpm_path}")
         
         return rpm_path
         
@@ -133,6 +151,14 @@ def main() -> int:
             print(f"  版本: {app_info.version}")
             print(f"  描述: {app_info.description}")
             print(f"  大小: {app_info.size // 1024}KB")
+            if app_info.categories:
+                print(f"  分类: {', '.join(app_info.categories)}")
+            if app_info.executable:
+                print(f"  可执行文件: {app_info.executable}")
+            if app_info.icon:
+                print(f"  图标: {app_info.icon}")
+            if app_info.desktop_file:
+                print(f"  .desktop文件: {app_info.desktop_file}")
             
             # 生成的包文件列表
             generated_packages: List[str] = []
@@ -185,7 +211,7 @@ def main() -> int:
     
     except Exception as e:
         print(f"程序执行出错: {e}")
-        if args.verbose if 'args' in locals() else False:
+        if 'args' in locals() and getattr(args, 'verbose', False):
             traceback.print_exc()
         return 1
 

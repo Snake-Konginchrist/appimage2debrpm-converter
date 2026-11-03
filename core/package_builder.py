@@ -76,6 +76,103 @@ class PackageBuilder(ABC):
         """
         self.package_config.update(config)
     
+    def _get_sub_config(self, package_type: str) -> Dict[str, Any]:
+        """
+        获取指定包类型的子配置（deb 或 rpm）
+        
+        配置支持嵌套结构，例如：
+            {"deb": {"depends": [...], "requires": [...]}, "rpm": {...}}
+        若不存在对应的子对象，返回空字典。
+        
+        Args:
+            package_type: 包类型 ('deb' 或 'rpm')
+        
+        Returns:
+            子配置字典
+        """
+        sub = self.package_config.get(package_type)
+        if isinstance(sub, dict):
+            return sub
+        return {}
+    
+    def _get_dependencies(self, package_type: str) -> list:
+        """
+        获取指定包类型的依赖列表
+        
+        优先从嵌套子配置的 'depends' 字段读取，
+        兼容旧的扁平 'depends' 字段。
+        
+        Args:
+            package_type: 包类型 ('deb' 或 'rpm')
+        
+        Returns:
+            依赖列表
+        """
+        deps = self._get_sub_config(package_type).get('depends')
+        if deps is None:
+            deps = self.package_config.get('depends', [])
+        if deps is None:
+            deps = []
+        return list(deps) if isinstance(deps, (list, tuple)) else [deps]
+    
+    def _get_requires(self, package_type: str) -> list:
+        """
+        获取指定包类型的需求列表
+        
+        优先从嵌套子配置的 'requires' 字段读取，
+        兼容旧的扁平 'requires' 字段。
+        
+        Args:
+            package_type: 包类型 ('deb' 或 'rpm')
+        
+        Returns:
+            需求列表
+        """
+        reqs = self._get_sub_config(package_type).get('requires')
+        if reqs is None:
+            reqs = self.package_config.get('requires', [])
+        if reqs is None:
+            reqs = []
+        return list(reqs) if isinstance(reqs, (list, tuple)) else [reqs]
+    
+    def _get_section(self, package_type: str, default: str = '') -> str:
+        """
+        获取指定包类型的分类(section)
+        
+        优先从嵌套子配置的 'section' 字段读取，
+        兼容旧的扁平 'section' 字段。
+        
+        Args:
+            package_type: 包类型 ('deb' 或 'rpm')
+            default: 默认值
+        
+        Returns:
+            分类字符串
+        """
+        section = self._get_sub_config(package_type).get('section')
+        if section is None:
+            section = self.package_config.get('section')
+        return section if section else default
+    
+    def _get_priority(self, package_type: str, default: str = '') -> str:
+        """
+        获取指定包类型的优先级(priority)
+        
+        优先从嵌套子配置的 'priority' 字段读取，
+        兼容旧的扁平 'priority' 字段。
+        
+        Args:
+            package_type: 包类型 ('deb' 或 'rpm')
+            default: 默认值
+        
+        Returns:
+            优先级字符串
+        """
+        priority = self._get_sub_config(package_type).get('priority')
+        if priority is None:
+            priority = self.package_config.get('priority')
+        return priority if priority else default
+    
     def get_package_name(self, preserve_case: bool = False) -> str:
         """
         获取包名称（转换为符合规范的格式）
@@ -143,12 +240,11 @@ class PackageBuilder(ABC):
         Returns:
             架构字符串
         """
-        # 如果配置中指定了架构，使用配置的架构
+        # 确定架构：优先使用配置，否则自动检测
         if 'architecture' in self.package_config and self.package_config['architecture']:
-            return self.package_config['architecture']
-        
-        # 自动检测系统架构
-        detected_arch = self._detect_system_architecture()
+            detected_arch = self.package_config['architecture']
+        else:
+            detected_arch = self._detect_system_architecture()
         
         # 根据包类型调整架构名称
         if package_type == 'rpm':
@@ -157,12 +253,19 @@ class PackageBuilder(ABC):
                 return 'x86_64'
             elif detected_arch == 'arm64':
                 return 'aarch64'
+            elif detected_arch == 'armhf':
+                return 'armv7hl'
+            elif detected_arch == 'i386':
+                return 'i686'
         
         return detected_arch
     
-    def get_package_version(self) -> str:
+    def get_package_version(self, package_type: str = 'deb') -> str:
         """
         获取包版本号
+        
+        Args:
+            package_type: 包类型 ('deb' 或 'rpm')，用于决定版本号规范化规则
         
         Returns:
             版本号字符串
@@ -171,11 +274,21 @@ class PackageBuilder(ABC):
         if not version or version == "":
             version = "1.0.0"
         
-        # 确保版本号符合规范
         import re
-        # 移除非数字、点、连字符的字符
-        version = re.sub(r'[^0-9.\-]', '', version)
+        # 只保留版本号中合法的字符：字母、数字、点、加号、波浪号、下划线、连字符
+        version = re.sub(r'[^0-9A-Za-z.+\-_~]', '', version)
+        # 移除开头/结尾的分隔符，确保以字母或数字开头结尾
+        version = version.strip('.-+_~')
         if not version:
             version = "1.0.0"
+        
+        # RPM版本号不允许包含连字符(连字符用于分隔Version与Release)，
+        # 也不允许包含下划线，改用波浪号(~)表示预发布版本，符合RPM惯例
+        if package_type == 'rpm':
+            version = version.replace('-', '~').replace('_', '~')
+            # 移除连续的波浪号
+            version = re.sub(r'~+', '~', version).strip('~')
+            if not version:
+                version = "1.0.0"
         
         return version 

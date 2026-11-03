@@ -4,7 +4,6 @@ AppImage处理核心模块
 """
 
 import os
-import re
 import configparser
 from typing import Dict, Optional, List
 from utils.command_executor import execute_command, check_command_exists
