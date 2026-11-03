@@ -1,17 +1,14 @@
 {
-    "maintainer": "Your Name <email@example.com>",
-    "license": "GPL-3.0",
+    "maintainer": "Package Maintainer <maintainer@example.com>",
+    "license": "Unknown",
     "homepage": "https://example.com",
     "deb": {
         "section": "graphics",
         "priority": "optional",
-        "depends": ["libgtk-3-0", "libqt5core5a"],
-        "requires": []
+        "depends": ["libc6", "libgcc-s1"]
     },
     "rpm": {
         "section": "Applications/Graphics",
-        "depends": [],
         "requires": ["glibc", "libgcc"]
-    },
-    "architecture": "amd64"
+    }
 }

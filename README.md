@@ -1,236 +1,104 @@
-# AppImage转DEB/RPM包转换器
+# AppImage 转 DEB/RPM 转换器
 
-这是一个用Python编写的工具，可以将AppImage应用程序转换为DEB或RPM包格式，方便在Linux系统上进行包管理和分发。
+使用 Python 将 Linux AppImage 重新打包为 DEB 或 RPM 安装包，便于通过系统包管理器安装和卸载应用。
 
-## 功能特性
+[使用指南](docs/usage.md) | [参与贡献](CONTRIBUTING.md) | [报告问题](https://github.com/Snake-Konginchrist/appimage2debrpm-converter/issues) | [安全说明](SECURITY.md) | [MIT 许可证](LICENSE)
 
-- 🔄 支持将AppImage转换为DEB包
-- 🔄 支持将AppImage转换为RPM包
-- 📦 自动提取AppImage内容和元数据
-- 🎯 生成符合标准的包结构
-- ⚙️ 支持自定义包配置
-- 📋 命令行界面，易于使用
-- 🧹 自动清理临时文件
+## 功能
 
-## 系统要求
+- 从 AppImage 提取应用文件，读取 `.desktop` 中的名称、描述、启动入口和图标。
+- 生成 DEB、RPM，或一次生成两种格式。
+- 为 DEB 与 RPM 分别配置分类和运行依赖，并兼容原有扁平配置与命令行参数。
+- 创建启动脚本、桌面入口和应用图标，提供桌面数据库及图标缓存更新脚本。
+- 使用 `dpkg-deb` 构建 DEB；缺少该工具时，使用 Python 标准库和 `ar` 打包。
+- 使用 `rpmbuild` 构建 RPM，提供分步进度和详细错误输出。
 
-### 基本要求
-- Python 3.7+
-- Linux操作系统
+## 环境要求
 
-### 依赖工具
+- Linux；生成的安装包需要在目标发行版上验证。
+- Python 3.9 或更高版本。当前代码使用 Python 3.9 引入的类型注解写法。
+- Git，用于获取源码；`unsquashfs`，用于 AppImage 提取流程。
+- DEB：`dpkg-deb`，或用于替代打包路径的 `ar`。
+- RPM：`rpmbuild`。
 
-#### 对于DEB包构建
-```bash
-# Ubuntu/Debian
-sudo apt-get install squashfs-tools dpkg-dev
+Python 部分仅使用标准库，无须安装第三方 Python 包。
 
-# 或者最小安装
-sudo apt-get install squashfs-tools dpkg-deb
-```
+## 快速开始
 
-#### 对于RPM包构建
-```bash
-# CentOS/RHEL/Fedora
-sudo yum install squashfs-tools rpm-build
-# 或
-sudo dnf install squashfs-tools rpm-build
-```
+### 1. 安装系统依赖
 
-## 安装
-
-1. 克隆或下载项目文件
-2. 确保安装了必要的系统工具（见上方依赖工具）
-3. 可选：安装Python依赖（目前主要使用标准库）
+Debian / Ubuntu，构建 DEB：
 
 ```bash
-# 如果需要额外功能，可以安装可选依赖
-pip install -r requirements.txt
+sudo apt-get update
+sudo apt-get install git python3 squashfs-tools dpkg binutils
 ```
 
-## 使用方法
-
-### 基本用法
+Fedora，构建 RPM：
 
 ```bash
-# 转换为DEB包
-python main.py app.AppImage
-
-# 转换为RPM包
-python main.py app.AppImage --format rpm
-
-# 同时生成DEB和RPM包
-python main.py app.AppImage --format both
-
-# 指定输出目录
-python main.py app.AppImage --output ./packages/
+sudo dnf install git python3 squashfs-tools rpm-build
 ```
 
-### 高级用法
+构建两种格式时，需要同时准备相应工具。其他发行版请使用其包管理器安装上述命令。
+
+### 2. 获取源码
 
 ```bash
-# 自定义包信息
-python main.py app.AppImage \
-    --format deb \
-    --maintainer "Your Name <email@example.com>" \
-    --section "graphics" \
-    --homepage "https://example.com" \
-    --depends "libgtk-3-0" "libqt5core5a"
-
-# 使用配置文件
-python main.py app.AppImage --config config.json
-
-# 详细输出和保留临时文件（调试用）
-python main.py app.AppImage --verbose --keep-temp
+git clone https://github.com/Snake-Konginchrist/appimage2debrpm-converter.git
+cd appimage2debrpm-converter
+python3 main.py --help
 ```
 
-### 配置文件示例
+### 3. 转换应用
 
-创建一个`config.json`文件：
+将 `./application.AppImage` 替换为实际文件路径：
 
-```json
-{
-    "maintainer": "Your Name <email@example.com>",
-    "license": "GPL-3.0",
-    "homepage": "https://example.com",
-    "deb": {
-        "section": "graphics",
-        "priority": "optional",
-        "depends": ["libgtk-3-0", "libqt5core5a"],
-        "requires": []
-    },
-    "rpm": {
-        "section": "Applications/Graphics",
-        "depends": [],
-        "requires": ["glibc", "qt5-qtbase"]
-    },
-    "architecture": "amd64"
-}
+```bash
+# 生成 DEB，输出到 ./output/
+python3 main.py ./application.AppImage
+
+# 生成 RPM
+python3 main.py ./application.AppImage --format rpm
+
+# 同时生成 DEB 和 RPM，并指定输出目录
+python3 main.py ./application.AppImage --format both --output ./packages/
 ```
 
-> 说明：`deb` 与 `rpm` 为两个独立的子配置对象，各自包含
-> `section`（分类，DEB 的 Section 字段 / RPM 的 Group 字段）、
-> `depends`（依赖）与 `requires`（需求）等字段，分别作用于
-> DEB 包与 RPM 包的构建，可配置不同的值。
-> 同时兼容旧的扁平配置和 `--section`、`--priority`、`--depends` 参数。
-> 显式命令行参数优先于配置文件；`--depends` 同时覆盖 DEB 的 `depends`
-> 和 RPM 的 `requires`，两种格式依赖不同时请使用各自的子配置。
+使用普通用户执行转换。提取流程会尝试运行输入 AppImage 的 `--appimage-extract`，因此应仅处理可信来源的文件。
 
-## 命令行选项
+## 配置
 
-```
-位置参数:
-  appimage              要转换的AppImage文件路径
+复制示例文件，按原应用及目标发行版调整维护者、许可证、依赖和架构：
 
-可选参数:
-  -h, --help            显示帮助信息
-  --version             显示版本信息
-  -f, --format {deb,rpm,both}
-                        输出包格式 (默认: deb)
-  -o, --output OUTPUT   输出目录路径 (默认: ./output)
-  -c, --config CONFIG   配置文件路径 (JSON格式)
-  -v, --verbose         显示详细输出
-  --keep-temp           保留临时文件 (用于调试)
-
-包配置选项:
-  -m, --maintainer MAINTAINER
-                        维护者信息 (格式: "姓名 <邮箱>")
-  --section SECTION     DEB包分类 (未配置时为 misc)
-  --priority PRIORITY   DEB包优先级 (未配置时为 optional)
-  --license LICENSE     软件许可证
-  --homepage HOMEPAGE   项目主页URL
-  --depends [DEPENDS ...]
-                        依赖包列表 (用空格分隔)
-  --architecture ARCH   目标架构 (如: amd64, x86_64)
+```bash
+cp config.example.json config.json
+python3 main.py ./application.AppImage --format both --config config.json
 ```
 
-## 项目结构
+`deb` 与 `rpm` 使用各自的配置对象。`--section`、`--priority`、`--depends` 等旧参数仍可使用；显式命令行参数优先于配置文件。配置字段、默认行为与完整选项见[使用指南](docs/usage.md)。
 
-```
-appimage2deb-converter/
-├── core/                   # 核心模块
-│   ├── appimage.py        # AppImage处理
-│   └── package_builder.py # 包构建器基类
-├── local_deb/              # DEB包构建（本地实现，避免调用系统库）
-│   └── deb_builder.py
-├── local_rpm/              # RPM包构建（本地实现，避免调用系统库）
-│   └── rpm_builder.py
-├── utils/                 # 工具模块
-│   ├── command_executor.py
-│   └── file_operations.py
-├── cli.py                 # 命令行界面
-├── main.py               # 主程序入口
-├── requirements.txt      # Python依赖
-└── README.md            # 说明文档
+## 使用范围
+
+- 本工具重新打包现有程序，不执行交叉编译，也不转换程序的 CPU 架构。未指定架构时，使用构建机器的架构。
+- 运行依赖需要按目标发行版填写；默认依赖不能替代完整的依赖检查。
+- 当前未从 AppImage 中识别应用版本，生成包的版本默认使用 `1.0.0`。
+- 生成安装包后，应在目标系统验证安装、启动和卸载。现有回归测试不等同于所有 AppImage 或发行版的兼容性认证。
+
+## 开发与贡献
+
+运行现有回归测试：
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
-## 工作原理
+测试使用 Python 标准库；实际 DEB 归档检查需要 `ar`，环境中存在 `dpkg-deb` 时还会检查包字段和文件列表。
 
-1. **提取AppImage**: 使用`unsquashfs`工具提取AppImage内容到临时目录
-2. **解析元数据**: 从`.desktop`文件和其他源获取应用程序信息
-3. **构建包结构**: 创建符合DEB/RPM标准的目录结构
-4. **复制文件**: 将应用程序文件复制到适当位置
-5. **生成元数据**: 创建`control`文件（DEB）或`.spec`文件（RPM）
-6. **构建包**: 使用`dpkg-deb`或`rpmbuild`生成最终包文件
-7. **清理**: 删除临时文件
+欢迎提交错误报告、功能建议、文档改进和代码贡献。提交方式、代码约定及验证要求见 [CONTRIBUTING.md](CONTRIBUTING.md)；普通使用问题请通过 [GitHub Issues](https://github.com/Snake-Konginchrist/appimage2debrpm-converter/issues) 提出。
 
-## 注意事项
+## 维护与许可证
 
-- 确保AppImage文件具有可执行权限
-- 某些AppImage可能需要特定的运行时依赖
-- 生成的包可能需要根据目标系统调整依赖关系
-- 建议在目标系统上测试生成的包
+由 [Snake-Konginchrist](https://github.com/Snake-Konginchrist) 维护，贡献者记录见 [Git 提交历史](https://github.com/Snake-Konginchrist/appimage2debrpm-converter/commits/main/)。
 
-## 故障排除
-
-### 常见错误
-
-1. **"缺少必要工具: unsquashfs"**
-   ```bash
-   sudo apt-get install squashfs-tools
-   ```
-
-2. **"需要dpkg-deb工具来构建DEB包"**
-   ```bash
-   sudo apt-get install dpkg-dev
-   ```
-
-3. **"需要rpmbuild工具来构建RPM包"**
-   ```bash
-   sudo yum install rpm-build
-   ```
-
-### 调试技巧
-
-- 使用`--verbose`选项查看详细输出
-- 使用`--keep-temp`选项保留临时文件进行检查
-- 检查生成的包内容：
-  ```bash
-  # DEB包
-  dpkg -c package.deb
-  
-  # RPM包
-  rpm -qlp package.rpm
-  ```
-
-## 许可证
-
-本项目采用MIT许可证。详见LICENSE文件。
-
-## 贡献
-
-欢迎提交问题报告和功能请求！如果您想贡献代码，请：
-
-1. Fork本项目
-2. 创建功能分支
-3. 提交更改
-4. 发起Pull Request
-
-## 更新日志
-
-### v1.0.0
-- 初始版本
-- 支持AppImage转DEB包
-- 支持AppImage转RPM包
-- 命令行界面
-- 配置文件支持 
+转换器源代码采用 [MIT 许可证](LICENSE)。被转换应用及其依赖仍遵循各自的许可证；配置中的 `license` 字段用于描述原应用，不会改变原应用的许可条件。
